@@ -4,9 +4,12 @@
  */
 
 #include <Arduino.h>
+#if defined(TEENSYDUINO)
+  #include <NativeDns.h>
+#endif
 #include "NtpClock.h"
 
-#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
+// #if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
 
 // ESP32 does not define SERIAL_PORT_MONITOR
 #ifndef SERIAL_PORT_MONITOR
@@ -19,10 +22,13 @@ namespace clock {
 const char NtpClock::kNtpServerName[] = "us.pool.ntp.org";
 
 void NtpClock::setup(
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
     const char* ssid,
     const char* password,
+#endif
     uint16_t connectTimeoutMillis
 ) {
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
   if (ssid) {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -33,19 +39,30 @@ void NtpClock::setup(
       #if ACE_TIME_NTP_CLOCK_DEBUG >= 1
         SERIAL_PORT_MONITOR.println(F("NtpClock::setup(): failed"));
       #endif
-        mIsSetUp = false;
         return;
       }
 
       delay(500);
     }
   }
+#elif defined(TEENSYDUINO)
+  if(!fnet_netif_is_initialized(fnet_netif_get_default())) {
+    #if ACE_TIME_NTP_CLOCK_DEBUG >= 1
+      SERIAL_PORT_MONITOR.println(F("NtpClock::setup(): failed"));
+    #endif
+    return;
+  }
+#endif
 
   mUdp.begin(mLocalPort);
 
 #if ACE_TIME_NTP_CLOCK_DEBUG >= 1
-  SERIAL_PORT_MONITOR.print(F("NtpClock::setup(): connected to"));
-  SERIAL_PORT_MONITOR.println(WiFi.localIP());
+  SERIAL_PORT_MONITOR.print(F("NtpClock::setup(): connected to "));
+  #if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
+    SERIAL_PORT_MONITOR.println(WiFi.localIP());
+  #elif defined(TEENSYDUINO)
+    SERIAL_PORT_MONITOR.println(Ethernet.localIP());
+  #endif
   #if defined(ESP8266)
     SERIAL_PORT_MONITOR.print(F("Local port: "));
     SERIAL_PORT_MONITOR.println(mUdp.localPort());
@@ -56,7 +73,13 @@ void NtpClock::setup(
 }
 
 acetime_t NtpClock::getNow() const {
-  if (!mIsSetUp || WiFi.status() != WL_CONNECTED) return kInvalidSeconds;
+  if (!mIsSetUp 
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
+      || WiFi.status() != WL_CONNECTED
+#elif defined(TEENSYDUINO)
+      || Ethernet.linkStatus() == LinkOFF
+#endif
+    ) return kInvalidSeconds;
 
   sendRequest();
 
@@ -71,7 +94,11 @@ acetime_t NtpClock::getNow() const {
 
 void NtpClock::sendRequest() const {
   if (!mIsSetUp) return;
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
   if (WiFi.status() != WL_CONNECTED) {
+#elif defined(TEENSYDUINO)
+  if (Ethernet.linkStatus() == LinkOFF) {
+#endif
   #if ACE_TIME_NTP_CLOCK_DEBUG >= 1
     SERIAL_PORT_MONITOR.println(
         F("NtpClock::sendRequest(): not connected"));
@@ -93,7 +120,20 @@ void NtpClock::sendRequest() const {
   // TODO: check return value of hostByName() for errors
   // When there is an error, the ntpServerIP seems to become "0.0.0.0".
   IPAddress ntpServerIP;
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
   WiFi.hostByName(mServer, ntpServerIP);
+#elif defined(TEENSYDUINO)
+	DNSClient dns;
+	dns.begin(Ethernet.dnsServerIP());
+	int ret = dns.getHostByName(mServer, ntpServerIP);
+	if (ret != 1) {
+    #if ACE_TIME_NTP_CLOCK_DEBUG >= 1
+      SERIAL_PORT_MONITOR.print(F("NtpClock::sendRequest(): DNS error: "));
+      SERIAL_PORT_MONITOR.println(ret);
+    #endif
+    return;
+  }
+#endif
   sendNtpPacket(ntpServerIP);
 }
 
@@ -103,7 +143,11 @@ bool NtpClock::isResponseReady() const {
 #endif
 
   if (!mIsSetUp) return false;
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)  
   if (WiFi.status() != WL_CONNECTED) {
+#elif defined(TEENSYDUINO)
+  if (Ethernet.linkStatus() == LinkOFF) {
+#endif
   #if ACE_TIME_NTP_CLOCK_DEBUG >= 3
     if (++rateLimiter == 0) {
       SERIAL_PORT_MONITOR.print("F[256]");
@@ -122,7 +166,11 @@ bool NtpClock::isResponseReady() const {
 
 acetime_t NtpClock::readResponse() const {
   if (!mIsSetUp) return kInvalidSeconds;
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)  
   if (WiFi.status() != WL_CONNECTED) {
+#elif defined(TEENSYDUINO)
+  if (Ethernet.linkStatus() == LinkOFF) {
+#endif
   #if ACE_TIME_NTP_CLOCK_DEBUG >= 2
     SERIAL_PORT_MONITOR.println("NtpClock::readResponse(): not connected");
   #endif
@@ -225,4 +273,4 @@ void NtpClock::sendNtpPacket(const IPAddress& address) const {
 } // clock
 } // ace_time
 
-#endif
+// #endif

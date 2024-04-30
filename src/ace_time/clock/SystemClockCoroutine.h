@@ -150,7 +150,7 @@ class SystemClockCoroutineTemplate :
             // Clobber the mRequestStatus to trigger the exponential backoff
             mRequestStatus = kStatusUnknown;
           } else {
-            this->syncNow(nowSeconds);
+            this->syncNow(nowSeconds, kSyncSourceReferenceClock);
             mCurrentSyncPeriodSeconds = mSyncPeriodSeconds;
             this->setSyncStatusCode(this->kSyncStatusOk);
           }

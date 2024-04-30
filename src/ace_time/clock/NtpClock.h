@@ -6,19 +6,24 @@
 #ifndef ACE_TIME_NTP_CLOCK_H
 #define ACE_TIME_NTP_CLOCK_H
 
-#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
+// #if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
 
 #include <stdint.h>
 #if defined(ESP8266) || defined(EPOXY_CORE_ESP8266)
   #include <ESP8266WiFi.h>
-#else
+#elif defined(ESP32)
   #include <WiFi.h>
 #endif
-#include <WiFiUdp.h>
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
+  #include <WiFiUdp.h>
+#endif
+#if defined(TEENSYDUINO)
+  #include <NativeEthernet.h>
+#endif
 #include "Clock.h"
 
 #ifndef ACE_TIME_NTP_CLOCK_DEBUG
-#define ACE_TIME_NTP_CLOCK_DEBUG 0
+#define ACE_TIME_NTP_CLOCK_DEBUG 1
 #endif
 
 namespace ace_time {
@@ -107,9 +112,12 @@ class NtpClock: public Clock {
      *    (default 10000 ms)
      */
     void setup(
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
         const char* ssid = nullptr,
         const char* password = nullptr,
-        uint16_t connectTimeoutMillis = kConnectTimeoutMillis);
+#endif
+        uint16_t connectTimeoutMillis = kConnectTimeoutMillis
+    );
 
     /** Return the name of the NTP server. */
     const char* getServer() const { return mServer; }
@@ -160,7 +168,11 @@ class NtpClock: public Clock {
     uint16_t const mLocalPort;
     uint16_t const mRequestTimeout;
 
+#if defined(ESP8266) || defined(ESP32) || defined(EPOXY_CORE_ESP8266)
     mutable WiFiUDP mUdp;
+#elif defined(TEENSYDUINO)
+    mutable EthernetUDP mUdp;
+#endif
     // buffer to hold incoming & outgoing packets
     mutable uint8_t mPacketBuffer[kNtpPacketSize];
     bool mIsSetUp = false;
@@ -169,6 +181,6 @@ class NtpClock: public Clock {
 }
 }
 
-#endif
+// #endif
 
 #endif

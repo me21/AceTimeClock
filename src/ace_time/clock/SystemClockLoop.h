@@ -116,7 +116,7 @@ class SystemClockLoopTemplate : public SystemClockTemplate<T_SCCI> {
               this->setSyncStatusCode(this->kSyncStatusError);
             } else {
               // Request succeeded.
-              this->syncNow(nowSeconds);
+              this->syncNow(nowSeconds, this->kSyncSourceReferenceClock);
               mCurrentSyncPeriodSeconds = mSyncPeriodSeconds;
               mRequestStatus = this->kStatusOk;
               this->setSyncStatusCode(this->kSyncStatusOk);

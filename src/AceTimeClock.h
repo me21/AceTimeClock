@@ -31,6 +31,10 @@
 #include "ace_time/clock/SystemClockLoop.h"
 #include "ace_time/clock/SystemClockCoroutine.h"
 
+#if defined(TEENSYDUINO)
+#include "ace_time/clock/TeensyRtcClock.h"
+#endif
+
 #if defined(ARDUINO_ARCH_STM32) || defined(EPOXY_DUINO)
 #include "ace_time/clock/StmRtcClock.h"
 #include "ace_time/clock/Stm32F1Clock.h"

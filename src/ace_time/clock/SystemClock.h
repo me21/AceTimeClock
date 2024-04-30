@@ -71,10 +71,21 @@ class SystemClockTemplate: public Clock {
     /** Sync was never done. */
     static const uint8_t kSyncStatusUnknown = 128;
 
+    enum SyncSource {
+      kSyncSourceUnknown,
+      kSyncSourceReferenceClock,
+      kSyncSourceBackupClock,
+      kSyncSourceUserCode,
+    };
+
     /** Attempt to retrieve the time from the backupClock if it exists. */
     void setup() {
       if (mBackupClock != nullptr) {
+        // TODO: will eventually call mBackupClock->setNow in nested functions which is probably undesired
         setNow(mBackupClock->getNow());
+        // a little ugly because ideally it should be an argument of setNow() method
+        // but I don't want to rewrite all descendants of Clock class for now
+        mLastSyncSource = kSyncSourceBackupClock;
       }
     }
 
@@ -121,7 +132,7 @@ class SystemClockTemplate: public Clock {
      * GPS clocks and this method will be a no-op.
      */
     void setNow(acetime_t epochSeconds) override {
-      syncNow(epochSeconds);
+      syncNow(epochSeconds, kSyncSourceUserCode);
 
       // Also set the reference clock if possible.
       if (mReferenceClock != nullptr) {
@@ -145,7 +156,7 @@ class SystemClockTemplate: public Clock {
     void forceSync() {
       if (mReferenceClock) {
         acetime_t nowSeconds = mReferenceClock->getNow();
-        syncNow(nowSeconds);
+        syncNow(nowSeconds, kSyncSourceReferenceClock);
       }
     }
 
@@ -159,6 +170,9 @@ class SystemClockTemplate: public Clock {
 
     /** Get sync status code. */
     uint8_t getSyncStatusCode() const { return mSyncStatusCode; }
+
+    /** Get sync source. */
+    SyncSource getLastSyncSource() const { return mLastSyncSource; }
 
     /**
      * Return the number of seconds since the previous sync attempt, successful
@@ -317,9 +331,10 @@ class SystemClockTemplate: public Clock {
      * few milliseconds per iteration, and which guarantees that the clock
      * never goes backwards in time.
      */
-    void syncNow(acetime_t epochSeconds) {
+    void syncNow(acetime_t epochSeconds, SyncSource source) {
       if (epochSeconds == kInvalidSeconds) return;
 
+      mLastSyncSource = source;
       mLastSyncTime = epochSeconds;
       acetime_t skew = mEpochSeconds - epochSeconds;
       mClockSkew = skew;
@@ -354,6 +369,7 @@ class SystemClockTemplate: public Clock {
     Clock* mBackupClock;
 
     mutable acetime_t mEpochSeconds = kInvalidSeconds;
+    SyncSource mLastSyncSource = kSyncSourceUnknown;
     acetime_t mLastSyncTime = kInvalidSeconds; // time when last synced
     uint32_t mPrevSyncAttemptMillis = 0;
     uint32_t mNextSyncAttemptMillis = 0;
